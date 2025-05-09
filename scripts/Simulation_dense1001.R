@@ -30,7 +30,7 @@ for(p_range in 1:nrow(centered_ranges)){
     
     
     # Print current loop status
-    #cat("Pulse percentage", centered_ranges$Percentage[p_range], "Noise FWHM:", noise_fwhm, "\n")
+    cat("Pulse percentage", centered_ranges$Percentage[p_range], "Noise FWHM:", noise_fwhm, "\n")
     
     
     # Initialize sample size and track methods that have met power threshold
@@ -47,7 +47,9 @@ for(p_range in 1:nrow(centered_ranges)){
       noise_fwhm = noise_fwhm,
       signal = Pulse, # Adjust signal as required
       method = methods_to_run,
-      n_iterations = 1000 # Set appropriate iteration count
+      n_iterations = N_sim, # Set appropriate iteration count
+      Continuum_size = 101,
+      domain_points = 1001,
     )
     
     # Extract power results for each method

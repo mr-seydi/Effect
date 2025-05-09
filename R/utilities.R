@@ -1,22 +1,3 @@
-
-#Fmax/SnPM function
-source("Fmax.R")
-
-
-#############Loading Library#####################
-
-#install.packages("reticulate")
-library(reticulate) # to read python code
-#pip install spm1d
-spm1d <- reticulate::import("spm1d")
-numpy <- reticulate::import("numpy")
-#pip install power1d
-power1d <- reticulate::import("power1d")
-scipy.ndimage <- reticulate::import("scipy.ndimage")
-
-#Writing to excel
-library(openxlsx)
-
 ################Data with NA#########################
 completed_data <- function(x, y, defined_domain=c(0,100)) {
   
@@ -162,7 +143,8 @@ data_generator <- function(data,signal,noise) {
 
 
 gaussian_pulse <- function(center, fwhm, continuum_size) {
-  sigma = fwhm_to_sigma(fwhm)
+  
+  sigma = fwhm_to_sigma((fwhm/100)*continuum_size)
   x_values = seq(0, continuum_size-1, by = 1)
   dens <- dnorm(x_values, mean = center, sd = sigma)
   return(list(density_val=dens, x_values=x_values))
@@ -183,8 +165,8 @@ square_pulse <- function(start_end_pulse, start_height,
       start_end_pulse[1] > start_end_pulse[2] ) {
     stop("start_end_pulse must have a form like c(start, end) and be within the continuum_size")
   }
-  start = start_end_pulse[1]
-  end = start_end_pulse[2]
+  start = start_end_pulse[1]+1
+  end = start_end_pulse[2]+1
   pulse = rep(start_height, continuum_size)
   pulse[start:end] = pulse_height
   return(pulse)
@@ -204,7 +186,8 @@ Initialize_method_list <- function(Methods, Conti_size=101, Iter_number=100){
 
 Power_data_generator <- function(Sample_size, Data,
                                  Signal, Conti_size = 101,
-                                 Noise_mu, Noise_sig, Noise_fwhm){
+                                 Noise_mu, Noise_sig, Noise_fwhm,
+                                 n_evaluation_points = NULL){
   
   noise1 <- noise_guassian_curve(number_of_curves = Sample_size,
                                  continuum_size = Conti_size)
@@ -216,13 +199,18 @@ Power_data_generator <- function(Sample_size, Data,
   if (is.null(Data)){
     data1 <- data_generator(signal = Signal, noise = noise1)
     data2 <- data_generator(noise = noise2)    
-  }
-  else if (is.null(Signal)) {
+  } else if (is.null(Signal)) {
     data1 <- data_generator(data = Data[,1], noise = noise1)
     data2 <- data_generator(data = Data[,2], noise = noise2)
   } else {
     data1 <- data_generator(data = Data, signal = Signal, noise = noise1)
     data2 <- data_generator(data = Data, noise = noise2)      
+  }
+  
+  if (!is.null(n_evaluation_points)) {
+    dense_data <- dense_data(data1=data1, data2=data2, eval_numbers = n_evaluation_points)
+    data1 <- t(dense_data$dense_data1)
+    data2 <- t(dense_data$dense_data2)
   }
   
   return(list(data1 = data1, data2 = data2))
@@ -289,9 +277,10 @@ Pval_method <- function(sampel1,sample2,method) {
 }
 
 
-p_spm <- function(data1, data2){
-  spm  <- spm1d$stats$ttest2(data1, data2, equal_var=FALSE)
-  p_val <- spm1d$rft1d$f$sf((spm$z)^2, spm$df, spm$Q, spm$fwhm, withBonf=TRUE)
+spm <- function(data1, data2){
+  # spm  <- spm1d$stats$ttest2(data1, data2, equal_var=FALSE)
+  # p_val <- spm1d$rft1d$f$sf((spm$z)^2, spm$df, spm$Q, spm$fwhm, withBonf=TRUE)
+  p_val <- SPM(data1, data2, variance.equal = FALSE, Clevel = 0.95)
   return(p_val)
 }
 
@@ -377,5 +366,28 @@ centered_ranges <- function(percentages, domain = c(0, 100)) {
   return(result)
 }
 
+######dense data#####
 
+dense_data <- function(data1, data2, eval_numbers){
+  fdObject_data1 = fda::Data2fd(argvals = seq(0,dim(data1)[1]-1,by=1), y = data1) #data must be a matrix with each column as a curve
+  fdObject_data2 = fda::Data2fd(argvals = seq(0,dim(data2)[1]-1,by=1), y = data2) #data must be a matrix with each column as a curve
+  rangeval1 <- fdObject_data1$basis$rangeval
+  rangeval2 <- fdObject_data2$basis$rangeval
+  if (sum(rangeval1 == rangeval2) != 2) {
+    stop(
+      "The range of values of {.arg data1} must be the same as the range of
+        values of {.arg data2}."
+    )
+  }
+  abscissa <- seq(rangeval1[1], rangeval1[2], length.out = eval_numbers)
+  coeff1 <- t(fda::eval.fd(fdobj = fdObject_data1, evalarg = abscissa))
+  coeff2 <- t(fda::eval.fd(fdobj = fdObject_data2, evalarg = abscissa))
+  
+  return(list(dense_data1 = coeff1, dense_data2 = coeff2))
+}
+
+
+col_diff <- function(data){
+  return(data[,2]-data[,1])
+}
 

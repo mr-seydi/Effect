@@ -8,6 +8,8 @@ Power_parallel <- function(data, sample_size,
                            noise_mean, noise_sd, noise_fwhm,
                            signal,
                            method, n_iterations,
+                           Continuum_size = 101,
+                           domain_points = NULL,
                            Write_file = FALSE,
                            file_name = "Power_Results.xlsx"){
   
@@ -25,12 +27,12 @@ Power_parallel <- function(data, sample_size,
   
   # Initialize the method list
   method_list <- Initialize_method_list(Methods = method,
-                                        Conti_size = 101,
+                                        Conti_size = ifelse(is.null(domain_points),Continuum_size,domain_points),
                                         Iter_number = n_iterations)
   
   # parallelize the power calculation
   number_cores=detectCores() #number of cores
-  registerDoParallel(number_cores-1) #register the number of cores
+  registerDoParallel(number_cores) #register the number of cores
   
   # The .combine function in foreach always takes two inputs at a time:
   # First: The cumulative result of previous iterations (starting with an initial value, if provided)
@@ -42,10 +44,11 @@ Power_parallel <- function(data, sample_size,
                      generated_data <- Power_data_generator(Sample_size = sample_size,
                                                             Data = data,
                                                             Signal = signal,
-                                                            Conti_size = 101,
+                                                            Conti_size = Continuum_size,
                                                             Noise_mu = noise_mean,
                                                             Noise_sig = noise_sd,
-                                                            Noise_fwhm = noise_fwhm)
+                                                            Noise_fwhm = noise_fwhm,
+                                                            n_evaluation_points = domain_points)
                      
                      # Calculate the pvalues for each method
                      method_list <- Pvalue_calculator(method_list, generated_data$data1,
@@ -80,7 +83,6 @@ Power_parallel <- function(data, sample_size,
               Input_Summary = input_info, File = file_name))
   
 }
-
 
 
 
