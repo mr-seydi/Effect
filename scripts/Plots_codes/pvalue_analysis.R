@@ -4,28 +4,28 @@ source("Parallel.R")
 # Define the input parameters
 noise_fwhm_values <- c(5, 25, 50)
 # pulse
-centered_ranges <- centered_ranges(c(5, 50, 100))
+centered_r <- centered_ranges(c(5, 50, 100))
 
 N_sim <- 2500
 sample_size <- 10
 noise_sd_values <- 1
 methods <- c("Parametric_SPM", "Nonparametric_SPM")
 
-for(p_range in 1:nrow(centered_ranges)){
+for(p_range in 1:nrow(centered_r)){
   
   #generate pulse
-  # Pulse <- square_pulse(start_end_pulse = c(centered_ranges$Start[p_range],
-  #                                           centered_ranges$End[p_range]),
+  # Pulse <- square_pulse(start_end_pulse = c(centered_r$Start[p_range],
+  #                                           centered_r$End[p_range]),
   #                       start_height = 0, pulse_height = 1)
   
   for (noise_fwhm in noise_fwhm_values) {
     
     file_name = paste0("Power_Results_","percentage",
-                       centered_ranges$Percentage[p_range], "_NoiseFWHM",
+                       centered_r$Percentage[p_range], "_NoiseFWHM",
                        noise_fwhm)
     library(readxl)
     assign(x = file_name,
-           value = read_excel(paste0("results/pvalues/", file_name, ".xlsx")))
+           value = read_excel(paste0("Outputs/pvalues/", file_name, ".xlsx")))
     
   }
 }
@@ -37,10 +37,10 @@ set.seed(123)
 smp <- sample(1:N_sim, 10)
 par(mfrow = c(3, 3))
 
-for(p_range in 1:nrow(centered_ranges)) {
+for(p_range in 1:nrow(centered_r)) {
   for (noise_fwhm in noise_fwhm_values) {
     file_name <- paste0("Power_Results_",
-                        "percentage", centered_ranges$Percentage[p_range],
+                        "percentage", centered_r$Percentage[p_range],
                         "_NoiseFWHM", noise_fwhm)
     
     # retrieve the data frame by name:
@@ -62,7 +62,7 @@ for(p_range in 1:nrow(centered_ranges)) {
             xlab = "Domain",
             ylab = "p-value",
             ylim = c(0, 1),
-            main = paste0("percentage", centered_ranges$Percentage[p_range]," ",
+            main = paste0("percentage", centered_r$Percentage[p_range]," ",
                                  "NoiseFWHM", noise_fwhm, ", power = ", round(power, 2))
     )
     abline(h = 0.05, col = "red", lty = 2, lwd = 2)
@@ -76,10 +76,10 @@ for(p_range in 1:nrow(centered_ranges)) {
 par(mfrow = c(3, 3))
 
 
-for(p_range in 1:nrow(centered_ranges)) {
+for(p_range in 1:nrow(centered_r)) {
   for (noise_fwhm in noise_fwhm_values) {
     file_name <- paste0("Power_Results_",
-                        "percentage", centered_ranges$Percentage[p_range],
+                        "percentage", centered_r$Percentage[p_range],
                         "_NoiseFWHM", noise_fwhm)
     
     # retrieve the data frame by name:
@@ -95,7 +95,7 @@ for(p_range in 1:nrow(centered_ranges)) {
             lwd = 2,
             xlab = "Domain",
             ylab = "Percentage",
-            main = paste0("percentage", centered_ranges$Percentage[p_range]," ",
+            main = paste0("percentage", centered_r$Percentage[p_range]," ",
                           "NoiseFWHM", noise_fwhm, ", power = ", round(power, 2) ),
             ylim = c(0, 1)
     )
@@ -107,10 +107,10 @@ for(p_range in 1:nrow(centered_ranges)) {
 #### power and roi power ####
 
 
-for(p_range in 1:nrow(centered_ranges)) {
+for(p_range in 1:nrow(centered_r)) {
   for (noise_fwhm in noise_fwhm_values) {
     file_name <- paste0("Power_Results_",
-                        "percentage", centered_ranges$Percentage[p_range],
+                        "percentage", centered_r$Percentage[p_range],
                         "_NoiseFWHM", noise_fwhm)
     
     # retrieve the data frame by name:
@@ -120,8 +120,8 @@ for(p_range in 1:nrow(centered_ranges)) {
     power <- mean(apply(this_df, 2, function(x) sum(x < 0.05)) >= 1)
     
     # power restricted to region of interest
-    signal <- square_pulse(start_end_pulse = c(centered_ranges$Start[p_range],
-                                              centered_ranges$End[p_range]),
+    signal <- square_pulse(start_end_pulse = c(centered_r$Start[p_range],
+                                              centered_r$End[p_range]),
                           start_height = 0, pulse_height = 1)
     roi <- which(signal!= 0)
     power_roi <- mean(apply(this_df[roi, ], 2, function(x) sum(x < 0.05)) >= 1)
@@ -137,10 +137,10 @@ for(p_range in 1:nrow(centered_ranges)) {
 
 par(mfrow = c(3, 3))
 
-for(p_range in 1:nrow(centered_ranges)) {
+for(p_range in 1:nrow(centered_r)) {
   for (noise_fwhm in noise_fwhm_values) {
     file_name <- paste0("Power_Results_",
-                        "percentage", centered_ranges$Percentage[p_range],
+                        "percentage", centered_r$Percentage[p_range],
                         "_NoiseFWHM", noise_fwhm)
     
     # retrieve the data frame by name:
@@ -153,7 +153,7 @@ for(p_range in 1:nrow(centered_ranges)) {
     
     hist(min_pval,
          breaks = seq(0, 1, by = 0.05),
-         main = paste0("percentage", centered_ranges$Percentage[p_range]," ",
+         main = paste0("percentage", centered_r$Percentage[p_range]," ",
                        "NoiseFWHM", noise_fwhm, ", power = ", round(power, 2) ),
          xlab = "p-value",
          ylab = "Frequency",
@@ -169,10 +169,10 @@ for(p_range in 1:nrow(centered_ranges)) {
 ####how many points is rejected for each curve####
 
 
-for(p_range in 1:nrow(centered_ranges)) {
+for(p_range in 1:nrow(centered_r)) {
   for (noise_fwhm in noise_fwhm_values) {
     file_name <- paste0("Power_Results_",
-                        "percentage", centered_ranges$Percentage[p_range],
+                        "percentage", centered_r$Percentage[p_range],
                         "_NoiseFWHM", noise_fwhm)
     
     # retrieve the data frame by name:
@@ -181,7 +181,7 @@ for(p_range in 1:nrow(centered_ranges)) {
     
     rejected_howmany <- apply(this_df, 2, function(x) sum(x < 0.05))
     
-    cat("percentage", centered_ranges$Percentage[p_range],
+    cat("percentage", centered_r$Percentage[p_range],
         "NoiseFWHM", noise_fwhm, "\n")
     print(table(rejected_howmany))
     

@@ -1,6 +1,6 @@
 
 rm(list=ls())
-source("Parallel.R")
+source("R/sources.R")
 
 
 # Define the input parameters

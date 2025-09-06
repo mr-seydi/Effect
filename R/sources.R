@@ -5,6 +5,7 @@ library(doParallel)
 library(plyr)
 library(tidyr)
 library(ggplot2)
+library(fst)
 
 #############Loading utilities#####################
 source("R/utilities.R")

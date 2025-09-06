@@ -27,13 +27,6 @@ fwhm_to_sigma <- function(fwhm){
 }
 
 
-ksmooth_gaussian <- function(x, fwhm) {
-  
-  SD = fwhm_to_sigma(fwhm)
-  #smoothed_vals = ksmooth(x = 1:length(x), y = x, bandwidth = SD, kernel = "normal")$y
-  smoothed_vals = scipy.ndimage$gaussian_filter1d(x, SD, mode='wrap')#$tolist()
-}
-
 
 #unsmoothed guassian noise curve
 noise_guassian_curve <- function(number_of_curves, continuum_size){ 
@@ -42,7 +35,6 @@ noise_guassian_curve <- function(number_of_curves, continuum_size){
   return(data)
   
 }
-
 
 
 #apply this scaling factor to any smoothed data to ensure it has unit variance after smoothing
@@ -75,10 +67,115 @@ set_scale <- function(nNodes, SD) {
 }
 
 
+# Computes a 1-D Gaussian (or its derivative) kernel.
+# sigma: standard deviation
+# order: 0 for the standard Gaussian, positive integers for derivatives
+# radius: half-width of the kernel; if not given, use truncate * sigma.
+# The same function as scipy.ndimage$gaussian_filter1d(x, SD, mode='wrap')#$tolist()
+gaussian_kernel1d <- function(sigma, order = 0, radius) {
+  if (order < 0)
+    stop("order must be non-negative")
+  
+  # Create grid: from -radius to radius.
+  x <- seq(-radius, radius)
+  
+  # Compute the basic Gaussian (unnormalized)
+  phi_x <- exp(-0.5 * (x / sigma)^2)
+  phi_x <- phi_x / sum(phi_x)  # normalize so that sum(phi_x) == 1
+  
+  if (order == 0) {
+    return(phi_x)
+  } else {
+    # For derivatives we need to multiply the Gaussian by a polynomial.
+    # The SciPy code computes the polynomial coefficients via a matrix method.
+    # Here we mimic that process.
+    expo <- 0:order  # exponents 0,1,...,order
+    q <- numeric(order + 1)
+    q[1] <- 1  # q[0] = 1  (R indexing: first element corresponds to exponent 0)
+    
+    # Build the “differentiation” matrices D (superdiagonal) and P (subdiagonal)
+    D <- matrix(0, nrow = order + 1, ncol = order + 1)
+    for (i in 1:order) {
+      D[i, i + 1] <- expo[i + 1]
+    }
+    P <- matrix(0, nrow = order + 1, ncol = order + 1)
+    for (i in 2:(order + 1)) {
+      P[i, i - 1] <- 1 / (-sigma^2)
+    }
+    Q_deriv <- D + P
+    # Apply the operator repeatedly (order times)
+    for (i in 1:order) {
+      q <- Q_deriv %*% q
+    }
+    # For each x value, evaluate the polynomial:
+    # Compute sum_{j=0}^{order} q[j] * x^j.
+    # (outer(x, expo, `^`) builds a matrix whose (i,j) entry is x[i]^(expo[j]).)
+    poly_val <- as.vector(outer(x, expo, `^`) %*% q)
+    return(poly_val * phi_x)
+  }
+}
+
+
+# Performs a 1-D correlation using periodic ("wrap") boundary conditions.
+# input: a numeric vector.
+# weights: the 1-D kernel (assumed to have odd length).
+correlate1d_wrap <- function(input, weights) {
+  n <- length(input)
+  k <- length(weights)
+  # Assume kernel size is odd so that it is symmetric around its center:
+  half <- (k - 1) / 2
+  result <- numeric(n)
+  
+  # For each element of the output, sum over the kernel with periodic indexing.
+  for (i in seq_len(n)) {
+    # Offsets: from -half to +half.
+    offsets <- (-half):half
+    # Compute wrapped indices: in R indices run 1..n.
+    idx <- ((i - 1 + offsets) %% n) + 1
+    result[i] <- sum(input[idx] * weights)
+  }
+  return(result)
+}
+
+# The main function: a 1-D Gaussian filter with periodic (wrap) boundary conditions.
+#
+# Arguments:
+#  - input: numeric vector to filter.
+#  - sigma: standard deviation of the Gaussian.
+#  - order: the order of the derivative (default 0 means no derivative).
+#  - truncate: how many sigmas to include in the kernel (ignored if radius is provided).
+#  - radius: if provided, the half-length of the kernel; otherwise computed as round(truncate * sigma).
+#
+# Note: In the SciPy version the kernel is reversed before calling the correlate1d.
+# We do the same here.
+gaussian_filter1d <- function(input, fwhm, order = 0, truncate = 4.0, radius = NULL) {
+  sigma <- fwhm_to_sigma(fwhm)
+  if (!is.numeric(input)){
+    stop("input must be numeric")
+  }
+  
+  # Determine kernel half-width (radius)
+  if (is.null(radius)) {
+    radius <- round(truncate * sigma)
+  } else if (radius < 0 || radius != as.integer(radius)) {
+    stop("radius must be a nonnegative integer")
+  }
+  
+  # Create the kernel.
+  weights <- gaussian_kernel1d(sigma, order, radius)
+  # In SciPy, the kernel is reversed (because of the use of correlation rather than convolution).
+  weights <- rev(weights)
+  
+  # Apply the filter using periodic (wrap) boundary conditions.
+  output <- t(apply(input, 1, function(x) correlate1d_wrap(x, weights)))
+  return(output)
+}
+
+
 smoothed_gussian_curves <- function(data, mu, sig, fwhm) {
   
   # Step 1: Smooth each curve in the data
-  smoothed_data <- ksmooth_gaussian(data, fwhm)
+  smoothed_data <- gaussian_filter1d(data, fwhm)
   
   
   # Step 2: Normalize the smoothed data to have unit variance
@@ -90,10 +187,17 @@ smoothed_gussian_curves <- function(data, mu, sig, fwhm) {
   smoothed_data_scaled <- smoothed_data * scale_factor
   
   # Step 4: Transform to have mean = mu and standard deviation = sig
-  smoothed_data_final <- smoothed_data_scaled * sig + mu
+  # if mu and sig was a single number
+  smoothed_data_final <- smoothed_data_scaled *
+    matrix(sig, nrow = dim(smoothed_data_scaled)[1],
+           ncol = dim(smoothed_data_scaled)[2], byrow = TRUE) +
+    matrix(mu,  nrow = dim(smoothed_data_scaled)[1],
+           ncol = dim(smoothed_data_scaled)[2], byrow = TRUE)
   
   return(t(smoothed_data_final))
 }
+
+
 
 
 
@@ -255,6 +359,39 @@ Power_calculator <- function(Pvalues, Iter_number, Alpha){
   
 }
 
+check_false_positives <- function(sig_matrix, D1) {
+  apply(sig_matrix, 2, function(col) {
+    sum(col[D1]) / length(D1)
+  })
+  
+}
+
+Sensetivity_calculator <- function(Pvalues, D1, Alpha){
+  
+  Methods <- names(Pvalues)
+  
+  for (M in Methods) {
+    
+    
+    # Check if the method is either "ERL" or "IATSE"
+    #Because those methods do not return p-values
+    if (M %in% c("ERL", "IATSE")) {
+      pvalue_less_alpha <- Pvalues[[M]]
+      
+      #check false positives
+      sensetivity <- mean(check_false_positives(pvalue_less_alpha, D1))
+      
+    } else {
+      pvalue_less_alpha <- Pvalues[[M]] < Alpha
+      sensetivity <-  mean(check_false_positives(pvalue_less_alpha, D1))
+    }
+    
+    Pvalues[[M]] <- sensetivity
+  }
+  
+  return(Pvalues)
+  
+}
 
 
 Pval_method <- function(sampel1,sample2,method) {
@@ -277,7 +414,7 @@ Pval_method <- function(sampel1,sample2,method) {
 }
 
 
-spm <- function(data1, data2){
+p_spm <- function(data1, data2){
   # spm  <- spm1d$stats$ttest2(data1, data2, equal_var=FALSE)
   # p_val <- spm1d$rft1d$f$sf((spm$z)^2, spm$df, spm$Q, spm$fwhm, withBonf=TRUE)
   p_val <- SPM(data1, data2, variance.equal = FALSE, Clevel = 0.95)
@@ -310,43 +447,107 @@ p_snpm <- function(data1, data2, B = 1000){
 
 ############## Parallel processing functions ####################
 # Custom combine function to accumulate matrices across iterations
+# parallel_combine_function <- function(x, y) {
+#   for (M in names(x)) {
+#     # Combine matrices from the same method in both x and y
+#     x[[M]] <- cbind(x[[M]], y[[M]])
+#   }
+#   return(x)
+# }
+
+# 2) A generic combine that dispatches on matrix vs numeric
+# parallel_combine_function <- function(x, y) {
+#   for (nm in names(x)) {
+#     xi <- x[[nm]]
+#     yi <- y[[nm]]
+#     
+#     #–– both sub‐lists?  Recurse:
+#     if (is.list(xi) && is.list(yi)) {
+#       x[[nm]] <- parallel_combine_function(xi, yi)
+#       
+#       #–– either matrices or data.frames?  cbind them:
+#     } else if ((is.matrix(xi)    || is.data.frame(xi)) &&
+#                (is.matrix(yi)    || is.data.frame(yi))) {
+#       # normalize to data.frame so columns line up
+#       x[[nm]] <- cbind(as.data.frame(xi), as.data.frame(yi))
+#       
+#       #–– both numeric vectors?  concatenate:
+#     } else if (is.numeric(xi) && is.numeric(yi)) {
+#       x[[nm]] <- c(xi, yi)
+#       
+#     } else {
+#       stop(sprintf(
+#         "Cannot combine element '%s' classes %s vs %s",
+#         nm, class(xi)[1], class(yi)[1]
+#       ))
+#     }
+#   }
+#   x
+# }
+
 parallel_combine_function <- function(x, y) {
-  for (M in names(x)) {
-    # Combine matrices from the same method in both x and y
-    x[[M]] <- cbind(x[[M]], y[[M]])
-  }
-  return(x)
+  # if one side is NULL (e.g. first pass), just take the other
+  if (is.null(x)) return(y)
+  if (is.null(y)) return(x)
+  
+  # 1) stitch together the two method_list’s
+  #    each is itself a list of two matrices of the same shape
+  ml_combined <- Map(function(mx, my) {
+    # both mx & my are matrices, so cbind them
+    cbind(mx, my)
+  }, x$method_list, y$method_list)
+  
+  # 2) concatenate the FWHM estimates
+  noise_fwhm_combined <- c(x$est_noise_fwhm, y$est_noise_fwhm)
+  data_fwhm_combined  <- c(x$est_data_fwhm,  y$est_data_fwhm)
+  
+  list(
+    method_list    = ml_combined,
+    est_noise_fwhm = noise_fwhm_combined,
+    est_data_fwhm  = data_fwhm_combined
+  )
 }
 
-# Handle the Excel file creation and saving for the results of parallel processing
-write_results_to_excel <- function(loop, power_results, input_info, file_name) {
-  # Create a new Excel workbook
-  wb <- createWorkbook()
+
+
+
+
+## Replace Excel output with fast binary .fst files
+# Install fst if needed:
+# install.packages("fst")
+
+# Handle the loop result list and save each element as a separate .fst file
+write_results_to_fst <- function(loop, base_path = "results") {
   
-  # Write each method's p-values matrix to a separate sheet, named as "Method=PowerValue"
+  # Iterate over each element in the list
   for (method_name in names(loop)) {
-    # Get the power result for this method
-    power_value <- round(power_results[[method_name]], 2)
+    # Extract the data frame/matrix
+    df <- as.data.frame(loop[[method_name]])
     
-    # Create a sheet name like "TWT=0.08"
-    sheet_name <- paste0(method_name, "=", format(power_value, nsmall = 2))
+    out_file <- file.path(paste0(base_path,"_",method_name, ".fst"))
     
-    # Add a new sheet
-    addWorksheet(wb, sheet_name)
-    
-    # Write the p-values matrix to the sheet
-    writeData(wb, sheet = sheet_name, loop[[method_name]])
+    # Write using high-speed fst format
+    write_fst(df, out_file, compress = 50)  # compress level 0-100; 50 is a good balance
   }
   
-  # Add a final sheet for the Input_Summary
-  addWorksheet(wb, "Input_Summary")
-  
-  # Write the input_info dataframe to the Input_Summary sheet
-  writeData(wb, sheet = "Input_Summary", input_info)
-  
-  # Save the workbook to the specified file name
-  saveWorkbook(wb, file_name, overwrite = TRUE)
 }
+
+write_estimated_noisefwhm_to_fst <- function(fwhm_est, base_path = "noisefwhm") {
+  # Convert to data frame
+  fwhm_df <- as.data.frame(fwhm_est)
+  
+  # Write using high-speed fst format
+  write_fst(fwhm_df, file.path(paste0(base_path,"_noisefwhm_est.fst")), compress = 50)
+}
+
+write_estimated_datafwhm_to_fst <- function(fwhm_est, base_path = "datafwhm") {
+  # Convert to data frame
+  fwhm_df <- as.data.frame(fwhm_est)
+  
+  # Write using high-speed fst format
+  write_fst(fwhm_df, file.path(paste0(base_path,"_datafwhm_est.fst")), compress = 50)
+}
+
 
 
 ############simulation function####################

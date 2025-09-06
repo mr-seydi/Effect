@@ -1,4 +1,4 @@
-source("basic_functions.R")
+source("R/Sources.R")
 set.seed(123)
 Noise_data_1 <- noise_guassian_curve(number_of_curves=10, continuum_size=101)
 NFWHM_10_1 <- smoothed_gussian_curves(data=Noise_data_1, mu=0, sig=1, fwhm=10)

@@ -1,40 +1,5 @@
-#################plots####################
-# power_plot_SnPM <- function(result_data,Ylim=c(0,1),Title="", legend="none"){
-#   #plot different curves representing the percentage column with x-axis as the noise fwhm and y-axis as the Parametric_SPM
-#   ggplot(result_data, aes(x = noise_fwhm, y = Nonparametric_SPM, color = as.factor(percentage))) +
-#     geom_line() + geom_point() + theme_minimal() +
-#     labs(title = Title,
-#          x = "Noise FWHM", y = "Power", color = "%") +
-#     #ylim between 0 and 1
-#     scale_y_continuous(limits = Ylim) +
-#     # remove legend
-#     theme(legend.position = legend) +
-#     guides(colour = guide_legend(nrow = 1))
-# }
-# power_plot_SPM <- function(result_data,Ylim=c(0,1),Title="", legend="none"){
-#   #plot different curves representing the percentage column with x-axis as the noise fwhm and y-axis as the Parametric_SPM
-#   ggplot(result_data, aes(x = noise_fwhm, y = Parametric_SPM, color = as.factor(percentage))) +
-#     geom_line() + geom_point() + theme_minimal() +
-#     labs(title = Title,
-#          x = "Noise FWHM", y = "Power", color = "%") +
-#     #ylim between 0 and 1
-#     scale_y_continuous(limits = Ylim) +
-#     # remove legend
-#     theme(legend.position = legend) +
-#     guides(colour = guide_legend(nrow = 2))
-# }
+#################plots functions####################
 
-# Pulse_plot <- function(Puls_data_long,Title_legend="Domain %",Ylim=c(-1,1)){
-#   ggplot(Puls_data_long, aes(x = Domain, y = Effect, group = Curve, linetype = Curve)) +
-#     geom_line(color = "black", linewidth = 0.3) +  # Use black color for all lines
-#     scale_x_continuous(breaks = c(0,50,100)) +
-#     theme_classic() +
-#     labs(title = "",
-#          x = "Domain", y = "Effect size", linetype = Title_legend) +
-#     scale_y_continuous(limits = Ylim,breaks = seq(Ylim[1],Ylim[2],0.5)) +
-#     scale_linetype_manual(values = c("dotted", "dashed", "solid"),
-#                           labels = c("5", "50", "100")) # Change labels # Custom line types
-# }
 
 Noise_plot <- function(Noise_curves, Title=""){
   cont_size = dim(Noise_curves)[1]
@@ -128,7 +93,7 @@ sample_plot <- function(data_type = "baseline", Org_data = NULL, Signal_curve,
   # Create the plot using ggplot2
   ggplot() +
     # First layer: Individual lines
-    geom_line(data = plot_data, aes(x = x_values, y = y_values, group = interaction(line_group, label), color = label), linewidth = 1, alpha = 0.4) +
+    geom_line(data = plot_data, aes(x = x_values, y = y_values, group = interaction(line_group, label), color = label), linewidth = 1, alpha = 0.2) +
     # Second layer: Mean lines without group aesthetic
     geom_line(data = mean_data, aes(x = x_values, y = y_values, color = label), linewidth = 2) +
     scale_color_manual(values = colors_plot_data) +  # Set colors for both sample labels
@@ -163,7 +128,7 @@ pulse_single_plot <- function(signal_data, legend_name, legend_title){
           legend.text = element_text(size = 12))
 }
 
-Data_plot <- function(dataset, TITLE){
+Data_plot <- function(dataset, TITLE, interval=NULL){
   cont_size <- dim(dataset)[1]
   
   # Create a data frame with the two-sample data, excluding 'Pulse'
@@ -177,7 +142,7 @@ Data_plot <- function(dataset, TITLE){
   diff_data <- data.frame(
     x_values = 0:(cont_size - 1),
     y_values = dataset[, 2] - dataset[, 1],
-    legend = factor(rep("Geometry", cont_size))  # Ensure Geometry is included in legend
+    legend = factor(rep("Effect", cont_size))  # Ensure Geometry is included in legend
   )
   
   # Combine both datasets
@@ -185,12 +150,12 @@ Data_plot <- function(dataset, TITLE){
   
   # Define color and line type for all lines
   color_values <- setNames(c("tomato", "cadetblue", "black"),
-                           c("Group 1", "Group 2", "Geometry"))
+                           c("Group 1", "Group 2", "Effect"))
   linetype_values <- setNames(c("solid", "solid", "dotted"),
-                              c("Group 1", "Group 2", "Geometry"))
+                              c("Group 1", "Group 2", "Effect"))
   
   # Create the plot using ggplot
-  ggplot(combined_data, aes(x = x_values, y = y_values, color = legend, linetype = legend)) +
+  p <- ggplot(combined_data, aes(x = x_values, y = y_values, color = legend, linetype = legend)) +
     geom_line(linewidth = 1) +  # Plot lines for each group
     labs(title = TITLE, x = "Domain", y = "Value") +  # Labels
     scale_color_manual(values = color_values) +  # Line colors
@@ -199,11 +164,126 @@ Data_plot <- function(dataset, TITLE){
     theme(plot.title = element_text(hjust = 0.5)) +  # Center the title
     theme(legend.position = "bottom") +
     theme(      
-      # axis.text.x = element_text(size = 12),
-      # axis.text.y = element_text(size = 12),
-      # axis.title.x = element_text(size = 14),
-      # axis.title.y = element_text(size = 14),
-      # plot.title = element_text(size = 16),
-      # legend.text = element_text(size = 12),
+      axis.text.x = element_text(size = 10, face = "plain"),
+      axis.text.y = element_text(size = 10, face = "plain"),
+      axis.title.x = element_text(size = 10, face = "plain"),
+      axis.title.y = element_text(size = 10, face = "plain"),
+      plot.title = element_text(size = 14, face = "plain"),
+      legend.text = element_text(size = 10, face = "plain"),
       legend.title = element_blank())  # Remove legend title
+  
+  if (!is.null(interval)) {
+    # Convert to data frame of intervals with columns xmin and xmax
+    if (is.matrix(interval) || is.data.frame(interval)) {
+      if (ncol(interval) != 2) stop("interval must have exactly 2 columns (xmin, xmax)")
+      interval_df <- as.data.frame(interval, check.names = FALSE)
+      names(interval_df) <- c("xmin", "xmax")
+    } else if (is.vector(interval) && length(interval) == 2) {
+      interval_df <- data.frame(xmin = interval[1], xmax = interval[2])
+    } else {
+      stop("interval must be a vector of length 2, or a matrix/data frame with 2 columns")
+    }
+    
+    
+    # Add shading
+    p <- p +
+      geom_rect(
+        data = interval_df,
+        inherit.aes = FALSE,
+        aes(xmin = xmin-1, xmax = xmax-1, ymin = -Inf, ymax = Inf),
+        fill = "darkviolet", alpha = 0.1
+      )
+  }
+  
+  # add darkorange vertical on the x-axis where diff_data==0
+  # zero_crossing <- diff_data[diff_data$y_values == 0, "x_values"]
+  # if (length(zero_crossing) > 0) {
+  #   p <- p + geom_vline(xintercept = zero_crossing - 1, color = "lightblue", linetype = "solid")
+  # }
+  
+  
+  return(p)
+}
+
+
+power_plot_SnPM <- function(result_data,Ylim=c(0,1),Title="", legend="none"){
+  #plot different curves representing the Geom_percentage column with x-axis as the noise fwhm and y-axis as the Parametric_SPM
+  ggplot(result_data, aes(x = NFWHM, y = Nonparametric_SPM, color = as.factor(Geom_percentage))) +
+    geom_line() + geom_point() + theme_minimal() +
+    labs(title = Title,
+         x = "Noise FWHM", y = "Ominbus Power", color = "%") +
+    #ylim between 0 and 1
+    scale_y_continuous(limits = Ylim) +
+    # remove legend
+    theme(legend.position = legend) +
+    guides(colour = guide_legend(nrow = 1))
+}
+power_plot_SPM <- function(result_data,Ylim=c(0,1),Title="", legend="none"){
+  #plot different curves representing the Geom_percentage column with x-axis as the noise fwhm and y-axis as the Parametric_SPM
+  ggplot(result_data, aes(x = NFWHM, y = Parametric_SPM, color = as.factor(Geom_percentage))) +
+    geom_line() + geom_point() + theme_minimal() +
+    labs(title = Title,
+         x = "Noise FWHM", y = "Ominbus Power", color = "%") +
+    #ylim between 0 and 1
+    scale_y_continuous(limits = Ylim) +
+    # remove legend
+    theme(legend.position = legend) +
+    guides(colour = guide_legend(nrow = 2))
+}
+Pulse_plot <- function(Puls_data_long, Title_legend = "Domain %") {
+  ggplot(Puls_data_long, aes(x = Domain, y = Effect, group = Curve,
+                             linetype = Curve,
+                             color = Curve)) +
+    geom_line(linewidth = 0.6) +  # Allow colors to be mapped dynamically
+    theme_classic() +
+    # x-axis values 0, 50, 100
+    scale_x_continuous(breaks = c(0, 50, 100)) +
+    labs(title = "",
+         x = "Domain", y = "Value",
+         linetype = Title_legend,
+         color = Title_legend) +
+    scale_y_continuous(limits = c(-1, 1)) +
+    scale_linetype_manual(values = c("dotted", "dashed", "solid"),
+                          labels = c("5", "50", "100")) + # Custom line types
+    scale_color_manual(values = c("#F8766D", "#00C1A3", "#FF6A98"),  # Custom colors
+                       labels = c("5", "50", "100")) + # Ensure labels match
+    theme(legend.position = "right")
+}
+# Pulse_plot <- function(Puls_data_long,Title_legend="Domain %"){
+#   ggplot(Puls_data_long, aes(x = Domain, y = Effect, group = Curve, linetype = Curve)) +
+#     geom_line(color = "black", linewidth = 0.3) +  # Use black color for all lines
+#     theme_classic() +
+#     # x-axis values 0, 50, 100
+#     scale_x_continuous(breaks = c(0, 50, 100)) +
+#     labs(title = "",
+#          x = "Domain", y = "Effect size", linetype = Title_legend) +
+#     scale_y_continuous(limits = c(-1, 1)) +
+#     scale_linetype_manual(values = c("dotted", "dashed", "solid"),
+#                           labels = c("5", "50", "100")) # Change labels # Custom line types
+# }
+
+
+sensetivity_plot_SnPM <- function(result_data,Ylim=c(0,1),Title="", legend="none"){
+  #plot different curves representing the Geom_percentage column with x-axis as the noise fwhm and y-axis as the Parametric_SPM
+  ggplot(result_data, aes(x = NFWHM, y = Sensitivity_Nonparametric_SPM, color = as.factor(Geom_percentage))) +
+    geom_line() + geom_point() + theme_minimal() +
+    labs(title = Title,
+         x = "Noise FWHM", y = "Sensetivity", color = "%") +
+    #ylim between 0 and 1
+    scale_y_continuous(limits = Ylim) +
+    # remove legend
+    theme(legend.position = legend) +
+    guides(colour = guide_legend(nrow = 1))
+}
+sensetivity_plot_SPM <- function(result_data,Ylim=c(0,1),Title="", legend="none"){
+  #plot different curves representing the Geom_percentage column with x-axis as the noise fwhm and y-axis as the Parametric_SPM
+  ggplot(result_data, aes(x = NFWHM, y = Sensitivity_Parametric_SPM, color = as.factor(Geom_percentage))) +
+    geom_line() + geom_point() + theme_minimal() +
+    labs(title = Title,
+         x = "Noise FWHM", y = "Sensetivity", color = "%") +
+    #ylim between 0 and 1
+    scale_y_continuous(limits = Ylim) +
+    # remove legend
+    theme(legend.position = legend) +
+    guides(colour = guide_legend(nrow = 2))
 }

@@ -1,4 +1,3 @@
-library(fda)
 Fmax <- function(formula,
                  B = 1000,
                  method = 'residuals',
